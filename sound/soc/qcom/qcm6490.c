@@ -23,6 +23,7 @@ struct qcm6490_snd_data {
 	struct snd_soc_card *card;
 	struct sdw_stream_runtime *sruntime[AFE_PORT_MAX];
 	struct snd_soc_jack jack;
+	struct snd_soc_jack dp_jack[8];
 	bool jack_setup;
 };
 
@@ -30,7 +31,9 @@ static int qcm6490_snd_init(struct snd_soc_pcm_runtime *rtd)
 {
 	struct qcm6490_snd_data *data = snd_soc_card_get_drvdata(rtd->card);
 	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
-
+	struct snd_soc_jack *dp_jack  = NULL;
+	int dp_pcm_id = 0;
+	dev_err(rtd->dev, "%s: trying dai id 0x%x\n", __func__, cpu_dai->id);
 	switch (cpu_dai->id) {
 	case TX_CODEC_DMA_TX_3:
 	case LPASS_CDC_DMA_TX3:
@@ -39,10 +42,20 @@ static int qcm6490_snd_init(struct snd_soc_pcm_runtime *rtd)
 	case VA_CODEC_DMA_TX_0:
 	case WSA_CODEC_DMA_RX_0:
 		return 0;
+	case DISPLAY_PORT_RX_0:
+		/* DISPLAY_PORT dai ids are not contiguous */
+		dp_pcm_id = 0;
+		dp_jack = &data->dp_jack[dp_pcm_id];
+		break;
+	case DISPLAY_PORT_RX_1 ... DISPLAY_PORT_RX_7:
+		dp_pcm_id = cpu_dai->id - DISPLAY_PORT_RX_1 + 1;
+		dp_jack = &data->dp_jack[dp_pcm_id];
+		break;
 	default:
 		dev_err(rtd->dev, "%s: invalid dai id 0x%x\n", __func__, cpu_dai->id);
 	}
-
+	if (dp_jack)
+		return qcom_snd_dp_jack_setup(rtd, dp_jack, dp_pcm_id);
 	return -EINVAL;
 }
 
